@@ -130,3 +130,9 @@ dmypy.json
 
 # vscode
 .vscode/
+
+# project
+*.csv
+
+# secret
+secret/__init__.py

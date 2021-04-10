@@ -9,4 +9,4 @@ class Greedy(object):
             return lst.max(1)[1].view(1, 1).item()
         
         # replay buffer
-        return torch.max(lst, 1)[1].unsqueeze(1)
+        return lst.detach().max(1)[0]

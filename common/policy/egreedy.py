@@ -1,9 +1,12 @@
+import sys
+import os
 import torch
 import random
 import math
 
-from greedy import Greedy
-from schedule import LinearSchedule
+sys.path.append(os.path.abspath("../../"))
+from common.policy.greedy import Greedy
+from common.policy.schedule import LinearSchedule
 
 
 class Egreedy(object):
