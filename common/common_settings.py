@@ -1,12 +1,12 @@
 import sys
 import os
 sys.path.append(os.path.abspath(".."))
-import secret
+from secret import *
 
 #### Line notify ####
 LINE_NOTIFY_FLG = True
 LINE_NOTIFY_MSG = "実行完了\n経過時間: {}"
-LINE_NOTIFY_TOKEN = secret.LINE_NOTIFY_TOKEN if LINE_NOTIFY_FLG else None
+LINE_NOTIFY_TOKEN = LINE_NOTIFY_TOKEN if LINE_NOTIFY_FLG else None
 
 #### Simulation parameters ####
 NUM_EPISODE = 2000
