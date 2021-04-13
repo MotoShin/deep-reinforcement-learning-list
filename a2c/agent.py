@@ -21,17 +21,20 @@ class Agent:
         self.env = CartPole()
         self.state = None
         self.memory = ReplayBuffer(TRAJECTORY_LENGTH, FRAME_NUM)
+        self.index = 0
 
     def reset_env(self):
         self.env.reset()
-        self.state = self.env.get_screen()
+        state = self.env.get_screen()
+        self.index = self.memory.store_frame(state)
+        self.state = state
         return self.state
 
     def step(self, action):
         state = self.state
         _, reward, done, _ = self.env.step(action)
 
-        self._save_memory(state, action, reward, done)
+        self.memory.store_effect(self.index, action, reward, done)
 
         if done:
             self.env.reset()
@@ -48,23 +51,25 @@ class Agent:
         self.memory = ReplayBuffer(TRAJECTORY_LENGTH, FRAME_NUM)
         return trajectory
     
-    def _save_memory(self, state, action, reward, done):
-        index = self.memory.store_frame(state)
-        self.memory.store_effect(index, action, reward, done)
-
 class MasterAgent:
     def __init__(self, action_num):
         self.network = ActorCriticNetwork(action_num)
+        self.optimizer = optim.Adam(self.network.parameters())
 
     def select(self, states):
         action_probs = None
         with torch.no_grad():
             states = Variable(states)
             value, action_probs = self.network(states)
-        dist = torch.distributions.categorical.Categorical(action_probs)
-        actions = dist.sample()
+        actions = action_probs.sample()
 
         return actions
+
+    def get_netowrk_outputs(self, states):
+        return self.network(tensor.from_numpy(states))
+
+    def save(self):
+        torch.save(self.network.state_dict(), NET_PARAMETERS_BK_PATH)
 
     def learning(self, trajectories):
         (states, actions, next_states, rewards, dones, discounted_returns) = [], [], [], [], [], []
@@ -91,5 +96,34 @@ class MasterAgent:
             discounted_returns = discounted_returns.cuda()
         
         values, action_probs = self.network(states)
-        dist = torch.distributions.categorical.Categorical(action_probs)
-        actions = dist.sample()
+        actions = action_probs.sample()
+        log_probs = action_probs.log_prob()
+        
+        ary_entropy = action_probs.entropy()
+        entropy = 0
+        for ary in ary_entropy:
+            entropy += ary.mean()
+        
+        adavantage = discounted_returns - values
+
+        actor_loss = -(log_probs * adavantage.detach()).mean()
+        critic_loss = adavantage.pow(2).mean()
+
+        loss = actor_loss + 0.5 * critic_loss - 0.001 * entropy
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+class TestAgent:
+    def __init__(self):
+        self.network = ActorCriticNetwork()
+        self.network.load_state_dict(NET_PARAMETERS_BK_PATH)
+
+    def select(self, state):
+        action_probs = None
+        with torch.no_grad():
+            state = Variable(state)
+            value, action_prob = self.network(state)
+        action = action_prob.sample()
+        return action

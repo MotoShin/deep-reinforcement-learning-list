@@ -14,18 +14,20 @@ class ActorCriticNetwork(nn.Module):
         self.fc5_1 = nn.Linear(512, 128)
         self.fc5_2 = nn.Linear(512, 128)
         self.policy_logits = nn.Linear(128, outputs)
+        self.sotmax = nn.Softmax(dim=1)
         self.values = nn.Linear(128, 1)
 
     def forward(self, x):
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
-        x = F.relu(self.fc4(x))
+        x = F.relu(self.fc4(x.view(x.size(0), -1)))
 
         x1 = F.relu(self.fc5_1(x))
         logits = self.policy_logits(x1)
+        action_probs = torch.distributions.categorical.Categorical(self.sotmax(logits))
 
         x2 = F.relu(self.fc5_2(x))
         values = self.values(x2)
 
-        return values, nn.Softmax(logits)
+        return values, action_probs
