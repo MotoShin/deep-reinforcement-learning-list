@@ -22,6 +22,10 @@ class Simulation(object):
         self.master_agent = MasterAgent(self.env.get_n_actions())
         self.agent_name = "a2c"
 
+        ## https://stackoverflow.com/questions/54338013/parallel-import-a-python-file-from-sibling-folder
+        parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        os.environ["PYTHONPATH"] = parent_dir + ":" + os.environ.get("PYTHONPATH", "")
+
     def simulation_reset(self):
         self.master_agent = MasterAgent(self.env.get_n_actions())
         self.reward = []
@@ -53,11 +57,11 @@ class Simulation(object):
         ray.init(local_mode=False)
         agents = [Agent.remote(agent_id=i) for i in range(AGENTS_NUM)]
 
-        states = ray.get([agent.reset_env().remote() for agent in agents])
+        states = ray.get([agent.reset_env.remote() for agent in agents])
         states = np.array(states)
 
         for n in range(UPDATE_NUM):
-            actions = self.master_agent.select(states)
+            actions = self.master_agent.select(torch.from_numpy(states))
             states = ray.get([agent.step.remote(action) for action, agent in zip(actions, agents)])
         
             trajectories = ray.get([agent.get_collect_trajectory.remote() for agent in agents])

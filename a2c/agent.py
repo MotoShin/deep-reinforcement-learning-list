@@ -11,6 +11,7 @@ sys.path.append(os.path.abspath(".."))
 from a2c.network import ActorCriticNetwork
 from a2c.settings import *
 from common.torch_settings import DTYPE, DEVICE, Variable
+from common.replaybuffer import ReplayBuffer
 from environment.cartpole import CartPole
 
 
@@ -24,11 +25,14 @@ class Agent:
         self.index = 0
 
     def reset_env(self):
-        self.env.reset()
         state = self.env.get_screen()
-        self.index = self.memory.store_frame(state)
-        self.state = state
-        return self.state
+        action = random.randrange(self.env.get_n_actions())
+        _, reward, done, _ = self.env.step(action)
+        self.index = self.memory.store_frame(state, action, reward, done)
+        self.memory.store_effect(self.index, action, reward, done)
+        self.env.reset()
+        self.state = self.env.get_screen()
+        return self.memory.sample()
 
     def step(self, action):
         state = self.state
@@ -50,7 +54,7 @@ class Agent:
         trajectory = {"s": obs_batch, "a": act_batch, "r": rew_batch, "s2": next_obs_batch, "dones": done_mask}
         self.memory = ReplayBuffer(TRAJECTORY_LENGTH, FRAME_NUM)
         return trajectory
-    
+
 class MasterAgent:
     def __init__(self, action_num):
         self.network = ActorCriticNetwork(action_num)
