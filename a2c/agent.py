@@ -6,6 +6,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
 import ray
+import random
 
 sys.path.append(os.path.abspath(".."))
 from a2c.network import ActorCriticNetwork
@@ -21,21 +22,23 @@ class Agent:
         self.agent_id = agent_id
         self.env = CartPole()
         self.state = None
-        self.memory = ReplayBuffer(TRAJECTORY_LENGTH, FRAME_NUM)
+        self.memory = ReplayBuffer(TRAJECTORY_LENGTH + 1, FRAME_NUM)
         self.index = 0
 
     def reset_env(self):
+        self.env.reset()
         state = self.env.get_screen()
         action = random.randrange(self.env.get_n_actions())
         _, reward, done, _ = self.env.step(action)
-        self.index = self.memory.store_frame(state, action, reward, done)
+        self.index = self.memory.store_frame(state)
         self.memory.store_effect(self.index, action, reward, done)
         self.env.reset()
         self.state = self.env.get_screen()
-        return self.memory.sample()
+        return self.memory.encode_recent_observation()
 
     def step(self, action):
         state = self.state
+        self.index = self.memory.store_frame(state)
         _, reward, done, _ = self.env.step(action)
 
         self.memory.store_effect(self.index, action, reward, done)
@@ -46,7 +49,7 @@ class Agent:
         else:
             self.state = self.env.get_screen()
         
-        return self.state
+        return self.memory.encode_recent_observation()
 
     def get_collect_trajectory(self):
         # 蓄積したtrajectoryの回収
@@ -70,7 +73,7 @@ class MasterAgent:
         return actions
 
     def get_netowrk_outputs(self, states):
-        return self.network(tensor.from_numpy(states))
+        return self.network(states)
 
     def save(self):
         torch.save(self.network.state_dict(), NET_PARAMETERS_BK_PATH)
@@ -79,12 +82,13 @@ class MasterAgent:
         (states, actions, next_states, rewards, dones, discounted_returns) = [], [], [], [], [], []
         
         for trajectory in trajectories:
-            states += trajectories["s"]
-            actions += trajectories["a"]
-            next_states += trajectories["s2"]
-            rewards += trajectories["r"]
-            dones += trajectories[dones]
-            discounted_returns += trajectories["R"]
+            # TODO: ここがうまくいかない
+            states += trajectory["s"]
+            actions += trajectory["a"]
+            next_states += trajectory["s2"]
+            rewards += trajectory["r"]
+            dones += trajectory["dones"]
+            discounted_returns += trajectory["R"]
 
         # TODO: ここらへん要検証
         states = Variable(torch.from_numpy(np.array(states, dtype=np.float32)).type(DTYPE) / 255.0)

@@ -61,17 +61,20 @@ class Simulation(object):
         states = np.array(states)
 
         for n in range(UPDATE_NUM):
-            actions = self.master_agent.select(torch.from_numpy(states))
-            states = ray.get([agent.step.remote(action) for action, agent in zip(actions, agents)])
+            for _ in range(TRAJECTORY_LENGTH + 1):
+                actions = self.master_agent.select(torch.from_numpy(states).type(DTYPE) / 255.0)
+                states = ray.get([agent.step.remote(action.item()) for action, agent in zip(actions, agents)])
+                states = np.array(states)
         
             trajectories = ray.get([agent.get_collect_trajectory.remote() for agent in agents])
 
             for trajectory in trajectories:
                 trajectory["R"] = [0] * TRAJECTORY_LENGTH
-                value, _ = self.master_agent(np.atleast_2d(trajectory["s2"][-1]))
-                R = value[0][0].numpy()
+                inp = np.atleast_2d(trajectory["s2"][-1])
+                value, _ = self.master_agent.get_netowrk_outputs(torch.from_numpy(np.array([inp])).type(DTYPE) / 255.0)
+                R = value.item()
                 for i in reversed(range(TRAJECTORY_LENGTH)):
-                    R = trajectory["r"][i] + GAMMA * (1 - trajectories["dones"][i]) * R
+                    R = trajectory["r"][i] + GAMMA * (1 - trajectory["dones"][i]) * R
                     trajectory["R"][i] = R
 
             self.master_agent.learning(trajectories)
