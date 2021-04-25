@@ -55,8 +55,11 @@ class Agent:
         # 蓄積したtrajectoryの回収
         obs_batch, act_batch, rew_batch, next_obs_batch, done_mask = self.memory.sample(TRAJECTORY_LENGTH)
         trajectory = {"s": obs_batch, "a": act_batch, "r": rew_batch, "s2": next_obs_batch, "dones": done_mask}
-        self.memory = ReplayBuffer(TRAJECTORY_LENGTH, FRAME_NUM)
+        self.memory = ReplayBuffer(TRAJECTORY_LENGTH + 1, FRAME_NUM)
         return trajectory
+
+    def close(self):
+        self.env.close()
 
 class MasterAgent:
     def __init__(self, action_num):
@@ -82,42 +85,46 @@ class MasterAgent:
         (states, actions, next_states, rewards, dones, discounted_returns) = [], [], [], [], [], []
         
         for trajectory in trajectories:
-            # TODO: ここがうまくいかない
-            states += trajectory["s"]
-            actions += trajectory["a"]
-            next_states += trajectory["s2"]
-            rewards += trajectory["r"]
-            dones += trajectory["dones"]
-            discounted_returns += trajectory["R"]
+            states.append(trajectory["s"])
+            actions.append(trajectory["a"])
+            next_states.append(trajectory["s2"])
+            rewards.append(trajectory["r"])
+            dones.append(trajectory["dones"])
+            discounted_returns.append(trajectory["R"])
 
-        # TODO: ここらへん要検証
         states = Variable(torch.from_numpy(np.array(states, dtype=np.float32)).type(DTYPE) / 255.0)
         actions = Variable(torch.from_numpy(np.array(actions)).long())
         rewards = Variable(torch.from_numpy(np.array(rewards, dtype=np.float32)))
         next_states = Variable(torch.from_numpy(np.array(next_states, dtype=np.float32)).type(DTYPE) / 255.0)
         not_done_mask = Variable(torch.from_numpy(1 - np.array(dones))).type(DTYPE)
-        discounted_returns = Variable(torch.from_numpy(np.array(discounted_returns, type=np.float32)))
+        discounted_returns = Variable(torch.from_numpy(np.array(discounted_returns, dtype=np.float32)))
 
         if torch.cuda.is_available():
             actions = actions.cuda()
             rewards = rewards.cuda()
             discounted_returns = discounted_returns.cuda()
         
-        values, action_probs = self.network(states)
-        actions = action_probs.sample()
-        log_probs = action_probs.log_prob()
+        #TODO: lossの求め方要検証
+        values, action_probs = self.network.parallel_input(states)
+        log_probs = []
+        for action_prob in action_probs:
+            action = action_prob.sample()
+            log_probs.append(action_prob.log_prob(action))
+        log_probs = torch.stack(log_probs)
+        values = torch.stack(values)
         
-        ary_entropy = action_probs.entropy()
+        ary_entropy = [action_prob.entropy() for action_prob in action_probs]
         entropy = 0
         for ary in ary_entropy:
             entropy += ary.mean()
         
-        adavantage = discounted_returns - values
+        adavantage = discounted_returns.detach() - values.squeeze(2)
 
-        actor_loss = -(log_probs * adavantage.detach()).mean()
+        actor_loss = (log_probs * adavantage.detach()).mean()
         critic_loss = adavantage.pow(2).mean()
 
-        loss = actor_loss + 0.5 * critic_loss - 0.001 * entropy
+        loss = -1 * actor_loss + 0.5 * critic_loss - 0.001 * entropy
+        print(loss)
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -125,13 +132,30 @@ class MasterAgent:
 
 class TestAgent:
     def __init__(self):
-        self.network = ActorCriticNetwork()
-        self.network.load_state_dict(NET_PARAMETERS_BK_PATH)
+        self.env = CartPole()
+        self.env.reset()
+        self.network = ActorCriticNetwork(self.env.get_n_actions())
+        self.network.load_state_dict(torch.load(NET_PARAMETERS_BK_PATH))
+        self.memory = ReplayBuffer(FRAME_NUM + 1, FRAME_NUM)
+        self.index = 0
+        self._init_memory()
+        self.env.close()
+    
+    def _init_memory(self):
+        self.index = self.memory.store_frame(self.env.get_screen())
+        action = random.randrange(self.env.get_n_actions())
+        _, reward, done, _ = self.env.step(action)
+        self.save_memory(action, reward, done)
 
     def select(self, state):
+        self.index = self.memory.store_frame(state)
+        inp = self.memory.encode_recent_observation()
         action_probs = None
         with torch.no_grad():
-            state = Variable(state)
-            value, action_prob = self.network(state)
+            inp = Variable(torch.from_numpy(np.array([inp], dtype=np.float32)).type(DTYPE) / 255.0).to(DEVICE)
+            value, action_prob = self.network(inp)
         action = action_prob.sample()
-        return action
+        return action.item()
+
+    def save_memory(self, action, reward, done):
+        self.memory.store_effect(self.index, action, reward, done)

@@ -133,6 +133,7 @@ dmypy.json
 
 # project
 *.csv
+value_net_bk.pth
 
 # secret
 secret/__init__.py

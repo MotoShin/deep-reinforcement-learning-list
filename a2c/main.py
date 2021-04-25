@@ -82,9 +82,12 @@ class Simulation(object):
             if n % TEST_PLAY_TERM == 0:
                 self.test_play()
 
+        for agent in agents:
+            agent.close.remote()
         ray.shutdown()
 
     def test_play(self):
+        self.master_agent.save()
         self.env.reset()
         state = self.env.get_screen()
         agent = TestAgent()
@@ -93,6 +96,7 @@ class Simulation(object):
         while True:
             action = agent.select(state)
             _, reward, done, _ = self.env.step(action)
+            agent.save_memory(action, reward, done)
             total_reward += reward
 
             if done:
@@ -102,6 +106,17 @@ class Simulation(object):
         
         self.reward.append(total_reward)
         self.env.close()
+
+    def _shape_time(self, elapsed_time):
+        elapsed_time = int(elapsed_time)
+
+        elapsed_hour = elapsed_time // 3600
+        elapsed_minute = (elapsed_time % 3600) // 60
+        elapsed_second = (elapsed_time % 3600 % 60)
+
+        return str(elapsed_hour).zfill(2) + ":" \
+                + str(elapsed_minute).zfill(2) + ":" \
+                + str(elapsed_second).zfill(2)
 
 if __name__ == '__main__':
     Simulation().start()

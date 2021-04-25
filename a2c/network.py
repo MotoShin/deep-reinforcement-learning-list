@@ -31,3 +31,13 @@ class ActorCriticNetwork(nn.Module):
         values = self.values(x2)
 
         return values, action_probs
+
+    def parallel_input(self, inps):
+        values = []
+        action_probs = []
+        for inp in inps:
+            value, action_prob = self.forward(inp)
+            values.append(value)
+            action_probs.append(action_prob)
+        
+        return values, action_probs
