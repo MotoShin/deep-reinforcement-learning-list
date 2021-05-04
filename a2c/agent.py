@@ -21,6 +21,7 @@ class Agent:
     def __init__(self, agent_id):
         self.agent_id = agent_id
         self.env = CartPole()
+        self.env.seed(SEED)
         self.state = None
         self.memory = ReplayBuffer(TRAJECTORY_LENGTH + 1, FRAME_NUM)
         self.index = 0
@@ -68,7 +69,7 @@ class MasterAgent:
     def select(self, states):
         action_probs = None
         with torch.no_grad():
-            states = Variable(states).to(DEVICE)
+            states = Variable(states)
             value, action_probs = self.network(states)
         actions = action_probs.sample()
 

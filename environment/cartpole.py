@@ -84,5 +84,8 @@ class CartPole(object):
             reward = -1
         return (state, reward, done, prob)
 
+    def seed(self, seed):
+        self.env.seed(seed)
+
     def close(self):
         self.env.close()

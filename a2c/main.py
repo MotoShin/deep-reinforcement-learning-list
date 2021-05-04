@@ -19,6 +19,7 @@ class Simulation(object):
         self.reward = []
         self.simulation_reward = []
         self.env = CartPole()
+        self.env.seed(SEED)
         self.master_agent = MasterAgent(self.env.get_n_actions())
         self.agent_name = "a2c"
 
