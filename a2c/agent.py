@@ -62,13 +62,13 @@ class Agent:
 
 class MasterAgent:
     def __init__(self, action_num):
-        self.network = ActorCriticNetwork(action_num)
+        self.network = ActorCriticNetwork(action_num).type(DTYPE).to(device=DEVICE)
         self.optimizer = optim.Adam(self.network.parameters(), lr=1e-4)
 
     def select(self, states):
         action_probs = None
         with torch.no_grad():
-            states = Variable(states)
+            states = Variable(states).to(DEVICE)
             value, action_probs = self.network(states)
         actions = action_probs.sample()
 
@@ -131,7 +131,7 @@ class MasterAgent:
 
 class TestAgent:
     def __init__(self, action_num, state):
-        self.network = ActorCriticNetwork(action_num)
+        self.network = ActorCriticNetwork(action_num).type(DTYPE).to(device=DEVICE)
         self.network.load_state_dict(torch.load(NET_PARAMETERS_BK_PATH))
         self.memory = ReplayBuffer(FRAME_NUM + 1, FRAME_NUM)
         self.index = self.memory.store_frame(state)
