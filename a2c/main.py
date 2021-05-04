@@ -39,7 +39,7 @@ class Simulation(object):
         for simulation_num in range(NUM_SIMULATION):
             self.simulation_reset()
             #### simulation start
-            self.one_simulation_start()
+            self.one_simulation_start(simulation_num)
             #### simulation end
             self.simulation_reward.append(self.reward)
             if (simulation_num + 1) % 10 == 0:
@@ -53,7 +53,7 @@ class Simulation(object):
         )
         print('End!')
 
-    def one_simulation_start(self):
+    def one_simulation_start(self, simulation_num):
         ray.init(local_mode=False)
         agents = [Agent.remote(agent_id=i) for i in range(AGENTS_NUM)]
 
@@ -61,6 +61,7 @@ class Simulation(object):
         states = np.array(states)
 
         for n in range(UPDATE_NUM):
+            self._output_progress(simulation_num, n)
             for _ in range(TRAJECTORY_LENGTH + 1):
                 actions = self.master_agent.select(torch.from_numpy(states).type(DTYPE) / 255.0)
                 states = ray.get([agent.step.remote(action.item()) for action, agent in zip(actions, agents)])
@@ -105,6 +106,14 @@ class Simulation(object):
 
         self.reward.append(total_reward)
         self.env.close()
+
+    def _output_progress(self, simulation_num, update_num):
+        sim = simulation_num + 1
+        update = update_num + 1
+        late = float((simulation_num * UPDATE_NUM + update) / (NUM_SIMULATION * UPDATE_NUM))
+        late_percent = late * 100
+        if (late_percent % 10 == 0):
+            print("progress: {: >3} %".format(late_percent))
 
     def _shape_time(self, elapsed_time):
         elapsed_time = int(elapsed_time)
