@@ -31,14 +31,10 @@ class Agent:
         action = random.randrange(self.env.get_n_actions())
         _, reward, done, _ = self.env.step(action)
         self.index = self.memory.store_frame(state)
-        self.memory.store_effect(self.index, action, reward, done)
-        self.env.reset()
-        self.state = self.env.get_screen()
         return self.memory.encode_recent_observation()
 
     def step(self, action):
         state = self.state
-        self.index = self.memory.store_frame(state)
         _, reward, done, _ = self.env.step(action)
 
         self.memory.store_effect(self.index, action, reward, done)
@@ -49,6 +45,8 @@ class Agent:
         else:
             self.state = self.env.get_screen()
         
+        self.index = self.memory.store_frame(self.state)
+        
         return self.memory.encode_recent_observation()
 
     def get_collect_trajectory(self):
@@ -56,6 +54,7 @@ class Agent:
         obs_batch, act_batch, rew_batch, next_obs_batch, done_mask = self.memory.sample(TRAJECTORY_LENGTH)
         trajectory = {"s": obs_batch, "a": act_batch, "r": rew_batch, "s2": next_obs_batch, "dones": done_mask}
         self.memory = ReplayBuffer(TRAJECTORY_LENGTH + 1, FRAME_NUM)
+        self.index = self.memory.store_frame(self.state)
         return trajectory
 
     def close(self):
@@ -64,7 +63,7 @@ class Agent:
 class MasterAgent:
     def __init__(self, action_num):
         self.network = ActorCriticNetwork(action_num)
-        self.optimizer = optim.Adam(self.network.parameters())
+        self.optimizer = optim.Adam(self.network.parameters(), lr=1e-4)
 
     def select(self, states):
         action_probs = None
@@ -104,51 +103,40 @@ class MasterAgent:
             rewards = rewards.cuda()
             discounted_returns = discounted_returns.cuda()
         
-        #TODO: lossの求め方要検証
         values, action_probs = self.network.parallel_input(states)
         log_probs = []
         for action_prob in action_probs:
             action = action_prob.sample()
             log_probs.append(action_prob.log_prob(action))
         log_probs = torch.stack(log_probs)
+        selected_action_log_probs = torch.sum(log_probs, dim=1, keepdim=True)
         values = torch.stack(values)
-        
+
         ary_entropy = [action_prob.entropy() for action_prob in action_probs]
-        entropy = 0
-        for ary in ary_entropy:
-            entropy += ary.mean()
+        ary_entropy = torch.stack(ary_entropy)
+        ary_entropy_sum = torch.sum(ary_entropy, dim=0, keepdim=True)
+        entropy = torch.mean(ary_entropy_sum)
         
-        adavantage = discounted_returns.detach() - values.squeeze(2)
+        adavantage = discounted_returns - values.squeeze(2)
 
-        actor_loss = (log_probs * adavantage.detach()).mean()
-        critic_loss = adavantage.pow(2).mean()
+        actor_loss = (selected_action_log_probs * adavantage.detach()).mean()
+        critic_loss = adavantage.detach().pow(2).mean()
 
-        loss = -1 * actor_loss + 0.5 * critic_loss - 0.001 * entropy
-        print(loss)
+        loss = -1 * actor_loss + 0.5 * critic_loss - 0.01 * entropy
+        # print(loss)
 
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
 class TestAgent:
-    def __init__(self):
-        self.env = CartPole()
-        self.env.reset()
-        self.network = ActorCriticNetwork(self.env.get_n_actions())
+    def __init__(self, action_num, state):
+        self.network = ActorCriticNetwork(action_num)
         self.network.load_state_dict(torch.load(NET_PARAMETERS_BK_PATH))
         self.memory = ReplayBuffer(FRAME_NUM + 1, FRAME_NUM)
-        self.index = 0
-        self._init_memory()
-        self.env.close()
-    
-    def _init_memory(self):
-        self.index = self.memory.store_frame(self.env.get_screen())
-        action = random.randrange(self.env.get_n_actions())
-        _, reward, done, _ = self.env.step(action)
-        self.save_memory(action, reward, done)
-
-    def select(self, state):
         self.index = self.memory.store_frame(state)
+    
+    def select(self, state):
         inp = self.memory.encode_recent_observation()
         action_probs = None
         with torch.no_grad():
@@ -157,5 +145,6 @@ class TestAgent:
         action = action_prob.sample()
         return action.item()
 
-    def save_memory(self, action, reward, done):
+    def save_memory(self, action, reward, done, next_state):
         self.memory.store_effect(self.index, action, reward, done)
+        self.index = self.memory.store_frame(next_state)

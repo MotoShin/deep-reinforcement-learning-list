@@ -22,7 +22,7 @@ TEST_PLAY_TERM = 10
 
 #### learning parameters ####
 BATCH_SIZE = 128
-GAMMA = 0.999
+GAMMA = 0.98
 TARGET_UPDATE = 10
 NET_PARAMETERS_BK_PATH = 'output/value_net_bk.pth'
 # Soft Update Setting
