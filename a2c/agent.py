@@ -25,6 +25,8 @@ class Agent:
         self.state = None
         self.memory = ReplayBuffer(TRAJECTORY_LENGTH + 1, FRAME_NUM)
         self.index = 0
+        self.last_memory = None
+        self.done = False
 
     def reset_env(self):
         self.env.reset()
@@ -35,6 +37,12 @@ class Agent:
         return self.memory.encode_recent_observation()
 
     def step(self, action):
+        if self.done:
+            state, action, reward, next_state = self.last_memory
+            self.memory.store_effect(self.index, action, reward, self.done)
+            self.index = self.memory.store_frame(state)
+            return self.memory.encode_recent_observation()
+
         state = self.state
         _, reward, done, _ = self.env.step(action)
 
@@ -43,6 +51,8 @@ class Agent:
         if done:
             self.env.reset()
             self.state = self.env.get_screen()
+            self.done = done
+            self.last_memory = (state, action, reward, self.state)
         else:
             self.state = self.env.get_screen()
         
@@ -55,6 +65,8 @@ class Agent:
         obs_batch, act_batch, rew_batch, next_obs_batch, done_mask = self.memory.sample(TRAJECTORY_LENGTH)
         trajectory = {"s": obs_batch, "a": act_batch, "r": rew_batch, "s2": next_obs_batch, "dones": done_mask}
         self.memory = ReplayBuffer(TRAJECTORY_LENGTH + 1, FRAME_NUM)
+        self.last_memory = None
+        self.done = False
         self.index = self.memory.store_frame(self.state)
         return trajectory
 
@@ -110,7 +122,6 @@ class MasterAgent:
             action = action_prob.sample()
             log_probs.append(action_prob.log_prob(action))
         log_probs = torch.stack(log_probs)
-        selected_action_log_probs = torch.sum(log_probs, dim=1, keepdim=True)
         values = torch.stack(values)
 
         ary_entropy = [action_prob.entropy() for action_prob in action_probs]
@@ -118,10 +129,10 @@ class MasterAgent:
         ary_entropy_sum = torch.sum(ary_entropy, dim=0, keepdim=True)
         entropy = torch.mean(ary_entropy_sum)
         
-        adavantage = discounted_returns - values.squeeze(2)
+        advantage = discounted_returns - values.squeeze(2)
 
-        actor_loss = (selected_action_log_probs * adavantage.detach()).mean()
-        critic_loss = adavantage.detach().pow(2).mean()
+        actor_loss = (log_probs * advantage.detach()).mean()
+        critic_loss = advantage.detach().pow(2).mean()
 
         loss = -1 * actor_loss + 0.5 * critic_loss - 0.01 * entropy
         # print(loss)
