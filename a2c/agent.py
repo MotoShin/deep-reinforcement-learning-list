@@ -121,7 +121,7 @@ class MasterAgent:
         advantage = discounted_returns - values.detach().squeeze(2)
 
         actor_loss = (log_probs * advantage.detach()).mean()
-        critic_loss = advantage.detach().pow(2).mean()
+        critic_loss = advantage.pow(2).mean()
 
         loss = -1 * actor_loss + 0.5 * critic_loss - 0.01 * entropy
         # print(loss)
