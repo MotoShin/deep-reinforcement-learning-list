@@ -118,7 +118,7 @@ class MasterAgent:
         entropy = torch.mean(ary_entropy_sum)
         
         # https://medium.com/programming-soda/advantage%E3%81%A7actor-critic%E3%82%92%E5%AD%A6%E7%BF%92%E3%81%99%E3%82%8B%E9%9A%9B%E3%81%AE%E6%B3%A8%E6%84%8F%E7%82%B9-a1b3925bc3e6
-        advantage = discounted_returns - values.detach().squeeze(2)
+        advantage = discounted_returns - values.squeeze(2)
 
         actor_loss = (log_probs * advantage.detach()).mean()
         critic_loss = advantage.pow(2).mean()
