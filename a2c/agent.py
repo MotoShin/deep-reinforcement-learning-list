@@ -25,6 +25,8 @@ class Agent:
         self.state = None
         self.memory = ReplayBuffer(TRAJECTORY_LENGTH + 1, FRAME_NUM)
         self.index = 0
+        self.reward = 0
+        self.episode_reward = 0
 
     def reset_env(self):
         self.env.reset()
@@ -37,11 +39,14 @@ class Agent:
     def step(self, action):
         state = self.state
         _, reward, done, _ = self.env.step(action)
+        self.reward += reward
 
         self.memory.store_effect(self.index, action, reward, done)
 
         if done:
             self.env.reset()
+            self.episode_reward = self.reward
+            self.reward = 0
             self.state = self.env.get_screen()
         else:
             self.state = self.env.get_screen()
@@ -57,6 +62,9 @@ class Agent:
         self.memory = ReplayBuffer(TRAJECTORY_LENGTH + 1, FRAME_NUM)
         self.index = self.memory.store_frame(self.state)
         return trajectory
+
+    def get_episode_reward(self):
+        return self.episode_reward
 
     def close(self):
         self.env.close()
@@ -118,13 +126,13 @@ class MasterAgent:
         entropy = torch.mean(ary_entropy_sum)
         
         # https://medium.com/programming-soda/advantage%E3%81%A7actor-critic%E3%82%92%E5%AD%A6%E7%BF%92%E3%81%99%E3%82%8B%E9%9A%9B%E3%81%AE%E6%B3%A8%E6%84%8F%E7%82%B9-a1b3925bc3e6
-        advantage = discounted_returns - values.squeeze(2)
+        advantage = discounted_returns - values.detach().squeeze(2)
 
         actor_loss = (log_probs * advantage.detach()).mean()
         critic_loss = advantage.pow(2).mean()
 
-        loss = -1 * actor_loss + 0.5 * critic_loss - 0.01 * entropy
-        # print(loss)
+        loss = -1 * actor_loss + 0.5 * critic_loss + -1 * 0.01 * entropy
+        print(loss)
 
         self.optimizer.zero_grad()
         loss.backward()

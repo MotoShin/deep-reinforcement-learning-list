@@ -82,7 +82,8 @@ class Simulation(object):
             self.master_agent.learning(trajectories)
 
             if n % TEST_PLAY_TERM == 0:
-                self.test_play()
+                rewards = ray.get([agent.get_episode_reward.remote() for agent in agents])
+                self.reward.append(float(sum(rewards)) / AGENTS_NUM)
 
         for agent in agents:
             agent.close.remote()
