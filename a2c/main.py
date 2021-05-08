@@ -94,6 +94,7 @@ class Simulation(object):
         for agent in agents:
             agent.close.remote()
         ray.shutdown()
+        self.env.close()
 
     def test_play(self):
         self.master_agent.save()
@@ -113,7 +114,6 @@ class Simulation(object):
                 break
 
         self.reward.append(total_reward)
-        self.env.close()
 
     def _output_progress(self, simulation_num, update_num):
         sim = simulation_num + 1
