@@ -6,7 +6,7 @@ from common.torch_settings import *
 
 #### a2c parameters ####
 AGENTS_NUM = 4
-UPDATE_NUM = 500
+UPDATE_NUM = 100
 TRAJECTORY_LENGTH = 8
 TEST_PLAY_TERM = 10
 
@@ -21,3 +21,6 @@ SEED = 0
 
 #### Replay Buffer parameters ####
 FRAME_NUM = 1
+
+#### Simulation parameters ####
+NUM_SIMULATION = 1

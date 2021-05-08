@@ -32,6 +32,7 @@ class Simulation(object):
     def simulation_reset(self):
         self.master_agent = MasterAgent(self.env.get_n_actions())
         self.reward = []
+        self.ave_reward = []
     
     def episode_reset(self):
         self.env.reset()
