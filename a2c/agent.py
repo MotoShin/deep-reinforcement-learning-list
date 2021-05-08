@@ -76,6 +76,7 @@ class MasterAgent:
 
     def select(self, states):
         action_probs = None
+        self.network.eval()
         with torch.no_grad():
             states = Variable(states)
             value, action_probs = self.network(states)
@@ -111,7 +112,8 @@ class MasterAgent:
             actions = actions.cuda()
             rewards = rewards.cuda()
             discounted_returns = discounted_returns.cuda()
-        
+
+        self.network.train()
         values, action_probs = self.network.parallel_input(states)
         log_probs = []
         for action_prob in action_probs:
@@ -126,13 +128,13 @@ class MasterAgent:
         entropy = torch.mean(ary_entropy_sum)
         
         # https://medium.com/programming-soda/advantage%E3%81%A7actor-critic%E3%82%92%E5%AD%A6%E7%BF%92%E3%81%99%E3%82%8B%E9%9A%9B%E3%81%AE%E6%B3%A8%E6%84%8F%E7%82%B9-a1b3925bc3e6
-        advantage = discounted_returns - values.detach().squeeze(2)
+        advantage = discounted_returns - values.squeeze(2).detach()
 
         actor_loss = (log_probs * advantage.detach()).mean()
         critic_loss = advantage.pow(2).mean()
 
         loss = -1 * actor_loss + 0.5 * critic_loss + -1 * 0.01 * entropy
-        # print(loss)
+        # print(loss.item())
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -148,6 +150,7 @@ class TestAgent:
     def select(self, state):
         inp = self.memory.encode_recent_observation()
         action_probs = None
+        self.network.eval()
         with torch.no_grad():
             inp = Variable(torch.from_numpy(np.array([inp], dtype=np.float32)).type(DTYPE) / 255.0).to(DEVICE)
             value, action_prob = self.network(inp)

@@ -18,6 +18,8 @@ class Simulation(object):
     def __init__(self):
         self.reward = []
         self.simulation_reward = []
+        self.ave_reward = []
+        self.simulation_ave_reward = []
         self.env = CartPole()
         self.env.seed(SEED)
         self.master_agent = MasterAgent(self.env.get_n_actions())
@@ -43,9 +45,12 @@ class Simulation(object):
             self.one_simulation_start(simulation_num)
             #### simulation end
             self.simulation_reward.append(self.reward)
+            self.simulation_ave_reward.append(self.ave_reward)
             if (simulation_num + 1) % 10 == 0:
                 DataShaping.makeCsv(self.simulation_reward, 'reward', "{}_reward_{}.csv".format(self.agent_name, simulation_num + 1))
+                DataShaping.makeCsv(self.simulation_ave_reward, 'reward', "{}_ave_reward_{}.csv".format(self.agent_name, simulation_num + 1))
         DataShaping.makeCsv(self.simulation_reward, 'reward', "{}_reward.csv".format(self.agent_name))
+        DataShaping.makeCsv(self.simulation_ave_reward, 'reward', "{}_ave_reward.csv".format(self.agent_name))
         end = time.time()
         LineNotify.send_line_notify(
             LINE_NOTIFY_FLG,
@@ -82,8 +87,9 @@ class Simulation(object):
             self.master_agent.learning(trajectories)
 
             if n % TEST_PLAY_TERM == 0:
+                self.test_play()
                 rewards = ray.get([agent.get_episode_reward.remote() for agent in agents])
-                self.reward.append(float(sum(rewards)) / AGENTS_NUM)
+                self.ave_reward.append(float(sum(rewards)) / AGENTS_NUM)
 
         for agent in agents:
             agent.close.remote()

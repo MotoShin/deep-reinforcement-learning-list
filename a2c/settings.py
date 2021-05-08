@@ -18,3 +18,6 @@ NET_PARAMETERS_BK_PATH = 'output/value_net_bk.pth'
 
 #### envenronment setting ####
 SEED = 0
+
+#### Replay Buffer parameters ####
+FRAME_NUM = 1
