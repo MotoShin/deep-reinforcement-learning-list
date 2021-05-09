@@ -132,7 +132,7 @@ class MasterAgent:
         actor_loss = (log_probs * advantage.detach()).mean()
         critic_loss = advantage.pow(2).mean()
 
-        loss = -1 * actor_loss + 0.5 * critic_loss + -1 * 0.01 * entropy
+        loss = actor_loss + 0.5 * critic_loss + -1 * 0.01 * entropy
         # print(loss.item())
 
         self.optimizer.zero_grad()
