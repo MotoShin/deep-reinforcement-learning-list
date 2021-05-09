@@ -116,8 +116,7 @@ class MasterAgent:
         self.network.train()
         values, action_probs = self.network.parallel_input(states)
         log_probs = []
-        for action_prob in action_probs:
-            action = action_prob.sample()
+        for action_prob, action in zip(action_probs, actions):
             log_probs.append(action_prob.log_prob(action))
         log_probs = torch.stack(log_probs)
         values = torch.stack(values)
