@@ -80,7 +80,10 @@ class Simulation(object):
                 trajectory["R"] = [0] * TRAJECTORY_LENGTH
                 inp = np.atleast_2d(trajectory["s2"][-1])
                 value, _ = self.master_agent.get_netowrk_outputs(torch.from_numpy(np.array([inp])).type(DTYPE) / 255.0)
-                R = value.item()
+                # https://github.com/openai/baselines/blob/ea25b9e8b234e6ee1bca43083f8f3cf974143998/baselines/a2c/runner.py#L58-L69
+                R = 0.0
+                if (trajectory["dones"][-1] == 0):
+                    R = value.item()
                 for i in reversed(range(TRAJECTORY_LENGTH)):
                     R = trajectory["r"][i] + GAMMA * (1 - trajectory["dones"][i]) * R
                     trajectory["R"][i] = R
