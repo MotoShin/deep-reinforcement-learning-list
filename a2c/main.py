@@ -88,7 +88,7 @@ class Simulation(object):
                     R = trajectory["r"][i] + GAMMA * (1 - trajectory["dones"][i]) * R
                     trajectory["R"][i] = R
 
-            self.master_agent.learning(trajectories)
+            self.master_agent.learning(trajectories, n + 1)
 
             if n % TEST_PLAY_TERM == 0:
                 self.test_play()

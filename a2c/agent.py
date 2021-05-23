@@ -73,6 +73,7 @@ class MasterAgent:
     def __init__(self, action_num):
         self.network = ActorCriticNetwork(action_num).type(DTYPE).to(device=DEVICE)
         self.optimizer = optim.Adam(self.network.parameters(), lr=1e-4)
+        self.entropy_coef = 0.01
 
     def select(self, states):
         action_probs = None
@@ -90,7 +91,9 @@ class MasterAgent:
     def save(self):
         torch.save(self.network.state_dict(), NET_PARAMETERS_BK_PATH)
 
-    def learning(self, trajectories):
+    def learning(self, trajectories, count):
+        if count % ENTROPY_COEF_DECREASE_TERM == 0:
+            self.entropy_coef = self.entropy_coef / 2.0
         (states, actions, next_states, rewards, dones, discounted_returns) = [], [], [], [], [], []
         
         for trajectory in trajectories:
@@ -127,12 +130,12 @@ class MasterAgent:
         entropy = torch.mean(ary_entropy_sum)
         
         # https://medium.com/programming-soda/advantage%E3%81%A7actor-critic%E3%82%92%E5%AD%A6%E7%BF%92%E3%81%99%E3%82%8B%E9%9A%9B%E3%81%AE%E6%B3%A8%E6%84%8F%E7%82%B9-a1b3925bc3e6
-        advantage = discounted_returns - values.squeeze(2).detach()
+        advantage = discounted_returns - values.squeeze(2)
 
         actor_loss = (-1 * log_probs * advantage.detach()).mean()
         critic_loss = advantage.pow(2).mean()
 
-        loss = actor_loss + 0.5 * critic_loss + -1 * 0.01 * entropy
+        loss = actor_loss + 0.5 * critic_loss + -1 * self.entropy_coef * entropy
         # print(loss.item())
 
         self.optimizer.zero_grad()
