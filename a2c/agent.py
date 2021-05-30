@@ -142,22 +142,15 @@ class MasterAgent:
         self.optimizer.step()
 
 class TestAgent:
-    def __init__(self, action_num, state):
+    def __init__(self, action_num):
         self.network = ActorCriticNetwork(action_num).type(DTYPE).to(device=DEVICE)
         self.network.load_state_dict(torch.load(NET_PARAMETERS_BK_PATH))
-        self.memory = ReplayBuffer(FRAME_NUM + 1, FRAME_NUM)
-        self.index = self.memory.store_frame(state)
     
     def select(self, state):
-        inp = self.memory.encode_recent_observation()
         action_prob = None
         self.network.eval()
         with torch.no_grad():
-            inp = Variable(torch.from_numpy(np.array([inp], dtype=np.float32)).type(DTYPE) / 255.0).to(DEVICE)
+            inp = Variable(torch.from_numpy(np.array([state], dtype=np.float32)).type(DTYPE) / 255.0).to(DEVICE)
             _, action_prob = self.network(inp)
         action = action_prob.sample()
         return action.item()
-
-    def save_memory(self, action, reward, done, next_state):
-        self.memory.store_effect(self.index, action, reward, done)
-        self.index = self.memory.store_frame(next_state)

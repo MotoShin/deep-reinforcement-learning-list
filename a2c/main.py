@@ -104,14 +104,13 @@ class Simulation(object):
         self.master_agent.save()
         self.env.reset()
         state = self.env.get_screen()
-        agent = TestAgent(self.env.get_n_actions(), self.env.get_screen())
+        agent = TestAgent(self.env.get_n_actions())
         
         total_reward = 0
         while True:
             action = agent.select(state)
             _, reward, done, _ = self.env.step(action)
             state = self.env.get_screen()
-            agent.save_memory(action, reward, done, state)
             total_reward += reward
 
             if done:
