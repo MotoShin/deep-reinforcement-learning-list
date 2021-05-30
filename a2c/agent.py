@@ -91,7 +91,7 @@ class MasterAgent:
         torch.save(self.network.state_dict(), NET_PARAMETERS_BK_PATH)
 
     def learning(self, trajectories, count):
-        if count % ENTROPY_COEF_DECREASE_TERM == 0:
+        if ENTROPY_COEF_DECREASE_FLG and count % ENTROPY_COEF_DECREASE_TERM == 0:
             self.entropy_coef = self.entropy_coef / 2.0 if (self.entropy_coef / 2.0) < 3.0e-10 else self.entropy_coef
         (states, actions, next_states, rewards, dones, discounted_returns) = [], [], [], [], [], []
         
