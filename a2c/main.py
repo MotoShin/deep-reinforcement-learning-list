@@ -69,7 +69,7 @@ class Simulation(object):
 
         for n in range(UPDATE_NUM):
             self._output_progress(simulation_num, n)
-            for _ in range(TRAJECTORY_LENGTH + 1):
+            for _ in range(TRAJECTORY_LENGTH):
                 actions = self.master_agent.select(torch.from_numpy(states).type(DTYPE) / 255.0)
                 states = ray.get([agent.step.remote(action.item()) for action, agent in zip(actions, agents)])
                 states = np.array(states)

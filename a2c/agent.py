@@ -10,9 +10,9 @@ import random
 
 sys.path.append(os.path.abspath(".."))
 from a2c.network import ActorCriticNetwork
+from a2c.memory import Memory
 from a2c.settings import *
 from common.torch_settings import DTYPE, DEVICE, Variable
-from common.replaybuffer import ReplayBuffer
 from environment.cartpole import CartPole
 
 
@@ -23,24 +23,21 @@ class Agent:
         self.env = CartPole()
         self.env.seed(SEED)
         self.state = None
-        self.memory = ReplayBuffer(TRAJECTORY_LENGTH + 1, FRAME_NUM)
-        self.index = 0
+        self.memory = Memory()
         self.reward = 0
         self.episode_reward = 0
 
     def reset_env(self):
         self.env.reset()
-        state = self.env.get_screen()
-        # action = random.randrange(self.env.get_n_actions())
-        # _, reward, done, _ = self.env.step(action)
-        self.index = self.memory.store_frame(state)
-        return self.memory.encode_recent_observation()
+        self.state = self.env.get_screen()
+        return self.env.get_screen()
 
     def step(self, action):
         _, reward, done, _ = self.env.step(action)
+        next_screen = self.env.get_screen()
         self.reward += reward
 
-        self.memory.store_effect(self.index, action, reward, done)
+        self.memory.add(np.copy(self.state), reward, action, done, next_screen)
 
         if done:
             self.env.reset()
@@ -49,17 +46,14 @@ class Agent:
             self.state = self.env.get_screen()
         else:
             self.state = self.env.get_screen()
-        
-        self.index = self.memory.store_frame(np.copy(self.state))
-        
-        return self.memory.encode_recent_observation()
+
+        return self.state
 
     def get_collect_trajectory(self):
         # 蓄積したtrajectoryの回収
-        obs_batch, act_batch, rew_batch, next_obs_batch, done_mask = self.memory.sample(TRAJECTORY_LENGTH)
+        obs_batch, act_batch, rew_batch, done_mask, next_obs_batch = self.memory.rollout()
         trajectory = {"s": obs_batch, "a": act_batch, "r": rew_batch, "s2": next_obs_batch, "dones": done_mask}
-        self.memory = ReplayBuffer(TRAJECTORY_LENGTH + 1, FRAME_NUM)
-        self.index = self.memory.store_frame(self.state)
+        self.memory = Memory()
         return trajectory
 
     def get_episode_reward(self):
