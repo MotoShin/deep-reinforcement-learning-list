@@ -31,13 +31,12 @@ class Agent:
     def reset_env(self):
         self.env.reset()
         state = self.env.get_screen()
-        action = random.randrange(self.env.get_n_actions())
-        _, reward, done, _ = self.env.step(action)
+        # action = random.randrange(self.env.get_n_actions())
+        # _, reward, done, _ = self.env.step(action)
         self.index = self.memory.store_frame(state)
         return self.memory.encode_recent_observation()
 
     def step(self, action):
-        state = self.state
         _, reward, done, _ = self.env.step(action)
         self.reward += reward
 
@@ -51,7 +50,7 @@ class Agent:
         else:
             self.state = self.env.get_screen()
         
-        self.index = self.memory.store_frame(self.state)
+        self.index = self.memory.store_frame(np.copy(self.state))
         
         return self.memory.encode_recent_observation()
 
@@ -80,7 +79,7 @@ class MasterAgent:
         self.network.eval()
         with torch.no_grad():
             states = Variable(states)
-            value, action_probs = self.network(states)
+            _, action_probs = self.network(states)
         actions = action_probs.sample()
 
         return actions
@@ -151,11 +150,11 @@ class TestAgent:
     
     def select(self, state):
         inp = self.memory.encode_recent_observation()
-        action_probs = None
+        action_prob = None
         self.network.eval()
         with torch.no_grad():
             inp = Variable(torch.from_numpy(np.array([inp], dtype=np.float32)).type(DTYPE) / 255.0).to(DEVICE)
-            value, action_prob = self.network(inp)
+            _, action_prob = self.network(inp)
         action = action_prob.sample()
         return action.item()
 
