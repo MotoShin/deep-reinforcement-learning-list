@@ -80,6 +80,8 @@ class MasterAgent:
 
     def get_netowrk_outputs(self, states):
         self.network.eval()
+        value = None
+        action_probs = None
         with torch.no_grad():
             states = Variable(states)
             value, action_probs = self.network(states)
