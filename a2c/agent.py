@@ -79,7 +79,11 @@ class MasterAgent:
         return actions
 
     def get_netowrk_outputs(self, states):
-        return self.network(states)
+        self.network.eval()
+        with torch.no_grad():
+            states = Variable(states)
+            value, action_probs = self.network(states)
+        return value, action_probs
 
     def save(self):
         torch.save(self.network.state_dict(), NET_PARAMETERS_BK_PATH)
