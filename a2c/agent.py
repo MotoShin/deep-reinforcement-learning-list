@@ -21,7 +21,6 @@ class Agent:
     def __init__(self, agent_id):
         self.agent_id = agent_id
         self.env = CartPole()
-        self.env.seed(SEED)
         self.state = None
         self.memory = Memory()
         self.reward = 0
