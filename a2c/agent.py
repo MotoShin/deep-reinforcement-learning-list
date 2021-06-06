@@ -120,13 +120,17 @@ class MasterAgent:
         values, action_probs = self.network(states)
         log_probs = action_probs.log_prob(actions)
 
+        one_hot = torch.nn.functional.one_hot(actions, num_classes=2)
+        x = one_hot * torch.log(action_probs.probs + 1e-5)
+        x2 = torch.sum(x, dim=1, keepdim=True)
+
         ary_entropy = action_probs.entropy()
         entropy = torch.mean(ary_entropy)
         
         # https://medium.com/programming-soda/advantage%E3%81%A7actor-critic%E3%82%92%E5%AD%A6%E7%BF%92%E3%81%99%E3%82%8B%E9%9A%9B%E3%81%AE%E6%B3%A8%E6%84%8F%E7%82%B9-a1b3925bc3e6
         advantage = discounted_returns.detach() - values.squeeze(1)
 
-        actor_loss = (log_probs * advantage.detach()).mean()
+        actor_loss = (x2 * advantage.detach()).mean()
         critic_loss = advantage.pow(2).mean()
 
         loss = -1 * actor_loss + 0.5 * critic_loss + -1 * self.entropy_coef * entropy
