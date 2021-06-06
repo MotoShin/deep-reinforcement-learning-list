@@ -20,6 +20,7 @@ class Simulation(object):
         self.simulation_reward = []
         self.ave_reward = []
         self.simulation_ave_reward = []
+        self.record_param = {"loss": [], "actor_loss": [], "critic_loss": [], "entropy": []}
         self.env = CartPole()
         self.env.seed(SEED)
         self.master_agent = MasterAgent(self.env.get_n_actions())
@@ -45,6 +46,8 @@ class Simulation(object):
             #### simulation start
             self.one_simulation_start(simulation_num)
             #### simulation end
+            for key, lst in zip(self.record_param.keys(), self.master_agent.get_record_param()):
+                self.record_param[key].append(lst)
             self.simulation_reward.append(self.reward)
             self.simulation_ave_reward.append(self.ave_reward)
             if (simulation_num + 1) % 10 == 0:
@@ -52,6 +55,8 @@ class Simulation(object):
                 DataShaping.makeCsv(self.simulation_ave_reward, 'reward', "{}_ave_reward_{}.csv".format(self.agent_name, simulation_num + 1))
         DataShaping.makeCsv(self.simulation_reward, 'reward', "{}_reward.csv".format(self.agent_name))
         DataShaping.makeCsv(self.simulation_ave_reward, 'reward', "{}_ave_reward.csv".format(self.agent_name))
+        for key in self.record_param.keys():
+            DataShaping.makeParamCsv(self.record_param[key], key, "{}_{}.csv".format(self.agent_name, key))
         end = time.time()
         LineNotify.send_line_notify(
             LINE_NOTIFY_FLG,

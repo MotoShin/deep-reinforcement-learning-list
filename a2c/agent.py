@@ -66,6 +66,10 @@ class MasterAgent:
         self.network = ActorCriticNetwork(action_num).type(DTYPE).to(device=DEVICE)
         self.optimizer = optim.Adam(self.network.parameters(), lr=1e-4)
         self.entropy_coef = 0.01
+        self.record_loss = []
+        self.record_actor_loss = []
+        self.record_critic_loss = []
+        self.record_entropy = []
 
     def select(self, states):
         action_probs = None
@@ -134,9 +138,17 @@ class MasterAgent:
         loss = actor_loss + 0.5 * critic_loss + -1 * self.entropy_coef * entropy
         # print(loss.item())
 
+        self.record_loss.append(loss.item())
+        self.record_actor_loss.append(actor_loss.item())
+        self.record_critic_loss.append(critic_loss.item())
+        self.record_entropy.append(entropy.item())
+
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+
+    def get_record_param(self):
+        return [self.record_loss, self.record_actor_loss, self.record_critic_loss, self.record_entropy]
 
 class TestAgent:
     def __init__(self, action_num):
