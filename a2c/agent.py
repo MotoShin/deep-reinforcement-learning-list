@@ -97,12 +97,12 @@ class MasterAgent:
         (states, actions, next_states, rewards, dones, discounted_returns) = [], [], [], [], [], []
         
         for trajectory in trajectories:
-            states.append(trajectory["s"])
-            actions.append(trajectory["a"])
-            next_states.append(trajectory["s2"])
-            rewards.append(trajectory["r"])
-            dones.append(trajectory["dones"])
-            discounted_returns.append(trajectory["R"])
+            states += trajectory["s"]
+            actions += trajectory["a"]
+            next_states += trajectory["s2"]
+            rewards += trajectory["r"]
+            dones += trajectory["dones"]
+            discounted_returns += trajectory["R"]
 
         states = Variable(torch.from_numpy(np.array(states, dtype=np.float32)).type(DTYPE) / 255.0)
         actions = Variable(torch.from_numpy(np.array(actions)).long())
@@ -117,20 +117,14 @@ class MasterAgent:
             discounted_returns = discounted_returns.cuda()
 
         self.network.train()
-        values, action_probs = self.network.parallel_input(states)
-        log_probs = []
-        for action_prob, action in zip(action_probs, actions):
-            log_probs.append(action_prob.log_prob(action))
-        log_probs = torch.stack(log_probs)
-        values = torch.stack(values)
+        values, action_probs = self.network(states)
+        log_probs = action_probs.log_prob(actions)
 
-        ary_entropy = [action_prob.entropy() for action_prob in action_probs]
-        ary_entropy = torch.stack(ary_entropy)
-        ary_entropy_sum = torch.sum(ary_entropy, dim=1, keepdim=True)
-        entropy = torch.mean(ary_entropy_sum)
+        ary_entropy = action_probs.entropy()
+        entropy = torch.mean(ary_entropy)
         
         # https://medium.com/programming-soda/advantage%E3%81%A7actor-critic%E3%82%92%E5%AD%A6%E7%BF%92%E3%81%99%E3%82%8B%E9%9A%9B%E3%81%AE%E6%B3%A8%E6%84%8F%E7%82%B9-a1b3925bc3e6
-        advantage = discounted_returns.detach() - values.squeeze(2)
+        advantage = discounted_returns.detach() - values.squeeze(1)
 
         actor_loss = -1 * (log_probs * advantage.detach()).mean()
         critic_loss = advantage.pow(2).mean()
