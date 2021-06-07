@@ -85,7 +85,11 @@ class Simulation(object):
                 trajectory["R"] = [0] * TRAJECTORY_LENGTH
                 inp = np.atleast_2d(trajectory["s2"][-1])
                 value, _ = self.master_agent.get_netowrk_outputs(torch.from_numpy(np.array([inp])).type(DTYPE) / 255.0)
-                R = value.item()
+                if (trajectory["dones"][-1] == 0):
+                    R = value.item()
+                else:
+                    R = 0
+
                 for i in reversed(range(TRAJECTORY_LENGTH)):
                     R = trajectory["r"][i] + GAMMA * (1 - trajectory["dones"][i]) * R
                     trajectory["R"][i] = R
