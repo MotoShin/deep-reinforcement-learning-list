@@ -82,17 +82,12 @@ class Simulation(object):
             trajectories = ray.get([agent.get_collect_trajectory.remote() for agent in agents])
 
             for trajectory in trajectories:
-                trajectory["R"] = [0] * TRAJECTORY_LENGTH
-                inp = np.atleast_2d(trajectory["s2"][-1])
-                value, _ = self.master_agent.get_netowrk_outputs(torch.from_numpy(np.array([inp])).type(DTYPE) / 255.0)
-                if (trajectory["dones"][-1] == 0):
-                    R = value.item()
+                value, _ = self.master_agent.get_netowrk_outputs(torch.from_numpy(np.array([trajectory["s2"][-1]])).type(DTYPE) / 255.0)
+                if trajectory["dones"][-1] == 0:
+                    rewards = self._discounted_with_dones(trajectory["r"]+[value], trajectory["dones"]+[0])[:-1]
                 else:
-                    R = 0
-
-                for i in reversed(range(TRAJECTORY_LENGTH)):
-                    R = trajectory["r"][i] + GAMMA * (1 - trajectory["dones"][i]) * R
-                    trajectory["R"][i] = R
+                    rewards = self._discounted_with_dones(trajectory["r"], trajectory["dones"])
+                trajectory["R"] = rewards
 
             self.master_agent.learning(trajectories, n + 1)
 
@@ -142,6 +137,14 @@ class Simulation(object):
         return str(elapsed_hour).zfill(2) + ":" \
                 + str(elapsed_minute).zfill(2) + ":" \
                 + str(elapsed_second).zfill(2)
+
+    def _discounted_with_dones(self, rewards, dones):
+        discounted = []
+        r = 0
+        for reward, done in zip(rewards[::-1], dones[::-1]):
+            r = reward + GAMMA * r * (1. - done)
+            discounted.append(r)
+        return discounted[::-1]
 
 if __name__ == '__main__':
     Simulation().start()
