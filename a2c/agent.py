@@ -50,7 +50,7 @@ class Agent:
 
     def get_collect_trajectory(self):
         # 蓄積したtrajectoryの回収
-        obs_batch, act_batch, rew_batch, done_mask, next_obs_batch = self.memory.rollout()
+        obs_batch, rew_batch, act_batch, done_mask, next_obs_batch = self.memory.rollout()
         trajectory = {"s": obs_batch, "a": act_batch, "r": rew_batch, "s2": next_obs_batch, "dones": done_mask}
         self.memory = Memory()
         return trajectory
@@ -118,7 +118,7 @@ class MasterAgent:
 
         for _ in range(len(states)):
             lr = self.lr.value()
-        self.optimizer = optim.Adam(self.network.parameters(), lr=lr)
+        self.optimizer = optim.Adam(self.network.parameters(), lr=1e-4)
 
         self.network.train()
         values, action_probs = self.network(states)
