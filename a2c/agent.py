@@ -64,7 +64,7 @@ class Agent:
 class MasterAgent:
     def __init__(self, action_num):
         self.network = ActorCriticNetwork(action_num).type(DTYPE).to(device=DEVICE)
-        self.optimizer = optim.Adam(self.network.parameters(), lr=1e-4)
+        self.lr = Scheduler(v=1e-4, nvalues=80e6)
         self.entropy_coef = 0.01
         self.record_loss = []
         self.record_actor_loss = []
@@ -116,6 +116,10 @@ class MasterAgent:
             rewards = rewards.cuda()
             discounted_returns = discounted_returns.cuda()
 
+        for _ in range(len(states)):
+            lr = self.lr.value()
+        self.optimizer = torch.optim.RMSprop(self.network.parameters(), lr=lr, alpha=0.99, eps=1e-5)
+
         self.network.train()
         values, action_probs = self.network(states)
         log_probs = action_probs.log_prob(actions)
@@ -157,3 +161,14 @@ class TestAgent:
             _, action_prob = self.network(inp)
         action = action_prob.sample()
         return action.item()
+
+class Scheduler(object):
+    def __init__(self, v, nvalues):
+        self.n = 0
+        self.v = v
+        self.nvalues = nvalues
+
+    def value(self):
+        current_value = self.v * (1 - self.n / self.nvalues)
+        self.n += 1.
+        return current_value
