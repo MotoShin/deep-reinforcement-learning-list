@@ -118,7 +118,7 @@ class MasterAgent:
 
         for _ in range(len(states)):
             lr = self.lr.value()
-        self.optimizer = torch.optim.RMSprop(self.network.parameters(), lr=lr, alpha=0.99, eps=1e-5)
+        self.optimizer = optim.Adam(self.network.parameters(), lr=lr)
 
         self.network.train()
         values, action_probs = self.network(states)
