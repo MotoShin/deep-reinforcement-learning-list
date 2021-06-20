@@ -10,9 +10,9 @@ import random
 
 sys.path.append(os.path.abspath(".."))
 from a2c.network import ActorCriticNetwork
+from a2c.memory import Memory
 from a2c.settings import *
 from common.torch_settings import DTYPE, DEVICE, Variable
-from common.replaybuffer import ReplayBuffer
 from environment.cartpole import CartPole
 
 
@@ -21,26 +21,22 @@ class Agent:
     def __init__(self, agent_id):
         self.agent_id = agent_id
         self.env = CartPole()
-        self.env.seed(SEED)
         self.state = None
-        self.memory = ReplayBuffer(TRAJECTORY_LENGTH + 1, FRAME_NUM)
-        self.index = 0
+        self.memory = Memory()
         self.reward = 0
         self.episode_reward = 0
 
     def reset_env(self):
         self.env.reset()
-        state = self.env.get_screen()
-        # action = random.randrange(self.env.get_n_actions())
-        # _, reward, done, _ = self.env.step(action)
-        self.index = self.memory.store_frame(state)
-        return self.memory.encode_recent_observation()
+        self.state = self.env.get_screen()
+        return self.env.get_screen()
 
     def step(self, action):
         _, reward, done, _ = self.env.step(action)
+        next_screen = self.env.get_screen()
         self.reward += reward
 
-        self.memory.store_effect(self.index, action, reward, done)
+        self.memory.add(np.copy(self.state), reward, action, done, next_screen)
 
         if done:
             self.env.reset()
@@ -49,17 +45,14 @@ class Agent:
             self.state = self.env.get_screen()
         else:
             self.state = self.env.get_screen()
-        
-        self.index = self.memory.store_frame(np.copy(self.state))
-        
-        return self.memory.encode_recent_observation()
+
+        return self.state
 
     def get_collect_trajectory(self):
         # 蓄積したtrajectoryの回収
-        obs_batch, act_batch, rew_batch, next_obs_batch, done_mask = self.memory.sample(TRAJECTORY_LENGTH)
+        obs_batch, rew_batch, act_batch, done_mask, next_obs_batch = self.memory.rollout()
         trajectory = {"s": obs_batch, "a": act_batch, "r": rew_batch, "s2": next_obs_batch, "dones": done_mask}
-        self.memory = ReplayBuffer(TRAJECTORY_LENGTH + 1, FRAME_NUM)
-        self.index = self.memory.store_frame(self.state)
+        self.memory = Memory()
         return trajectory
 
     def get_episode_reward(self):
@@ -71,12 +64,15 @@ class Agent:
 class MasterAgent:
     def __init__(self, action_num):
         self.network = ActorCriticNetwork(action_num).type(DTYPE).to(device=DEVICE)
-        self.optimizer = optim.Adam(self.network.parameters(), lr=1e-4)
+        self.lr = Scheduler(v=1e-4, nvalues=80e6)
         self.entropy_coef = 0.01
+        self.record_loss = []
+        self.record_actor_loss = []
+        self.record_critic_loss = []
+        self.record_entropy = []
 
     def select(self, states):
         action_probs = None
-        self.network.eval()
         with torch.no_grad():
             states = Variable(states)
             _, action_probs = self.network(states)
@@ -85,7 +81,12 @@ class MasterAgent:
         return actions
 
     def get_netowrk_outputs(self, states):
-        return self.network(states)
+        value = None
+        action_probs = None
+        with torch.no_grad():
+            states = Variable(states)
+            value, action_probs = self.network(states)
+        return value, action_probs
 
     def save(self):
         torch.save(self.network.state_dict(), NET_PARAMETERS_BK_PATH)
@@ -96,12 +97,12 @@ class MasterAgent:
         (states, actions, next_states, rewards, dones, discounted_returns) = [], [], [], [], [], []
         
         for trajectory in trajectories:
-            states.append(trajectory["s"])
-            actions.append(trajectory["a"])
-            next_states.append(trajectory["s2"])
-            rewards.append(trajectory["r"])
-            dones.append(trajectory["dones"])
-            discounted_returns.append(trajectory["R"])
+            states += trajectory["s"]
+            actions += trajectory["a"]
+            next_states += trajectory["s2"]
+            rewards += trajectory["r"]
+            dones += trajectory["dones"]
+            discounted_returns += trajectory["R"]
 
         states = Variable(torch.from_numpy(np.array(states, dtype=np.float32)).type(DTYPE) / 255.0)
         actions = Variable(torch.from_numpy(np.array(actions)).long())
@@ -115,31 +116,37 @@ class MasterAgent:
             rewards = rewards.cuda()
             discounted_returns = discounted_returns.cuda()
 
-        self.network.train()
-        values, action_probs = self.network.parallel_input(states)
-        log_probs = []
-        for action_prob, action in zip(action_probs, actions):
-            log_probs.append(action_prob.log_prob(action))
-        log_probs = torch.stack(log_probs)
-        values = torch.stack(values)
+        for _ in range(len(states)):
+            lr = self.lr.value()
+        self.optimizer = optim.Adam(self.network.parameters(), lr=1e-4)
 
-        ary_entropy = [action_prob.entropy() for action_prob in action_probs]
-        ary_entropy = torch.stack(ary_entropy)
-        ary_entropy_sum = torch.sum(ary_entropy, dim=1, keepdim=True)
-        entropy = torch.mean(ary_entropy_sum)
+        self.network.train()
+        values, action_probs = self.network(states)
+        log_probs = action_probs.log_prob(actions)
+
+        ary_entropy = action_probs.entropy()
+        entropy = torch.mean(ary_entropy)
         
         # https://medium.com/programming-soda/advantage%E3%81%A7actor-critic%E3%82%92%E5%AD%A6%E7%BF%92%E3%81%99%E3%82%8B%E9%9A%9B%E3%81%AE%E6%B3%A8%E6%84%8F%E7%82%B9-a1b3925bc3e6
-        advantage = discounted_returns - values.squeeze(2)
+        advantage = discounted_returns - values.squeeze(1).detach()
 
         actor_loss = (-1 * log_probs * advantage.detach()).mean()
-        critic_loss = advantage.pow(2).mean()
+        critic_loss = ((values.squeeze(1) - discounted_returns).pow(2)).mean()
 
         loss = actor_loss + 0.5 * critic_loss + -1 * self.entropy_coef * entropy
         # print(loss.item())
 
+        self.record_loss.append(loss.item())
+        self.record_actor_loss.append(actor_loss.item())
+        self.record_critic_loss.append(critic_loss.item())
+        self.record_entropy.append(entropy.item())
+
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+
+    def get_record_param(self):
+        return [self.record_loss, self.record_actor_loss, self.record_critic_loss, self.record_entropy]
 
 class TestAgent:
     def __init__(self, action_num):
@@ -154,3 +161,14 @@ class TestAgent:
             _, action_prob = self.network(inp)
         action = action_prob.sample()
         return action.item()
+
+class Scheduler(object):
+    def __init__(self, v, nvalues):
+        self.n = 0
+        self.v = v
+        self.nvalues = nvalues
+
+    def value(self):
+        current_value = self.v * (1 - self.n / self.nvalues)
+        self.n += 1.
+        return current_value

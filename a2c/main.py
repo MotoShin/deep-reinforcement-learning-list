@@ -20,6 +20,7 @@ class Simulation(object):
         self.simulation_reward = []
         self.ave_reward = []
         self.simulation_ave_reward = []
+        self.record_param = {"loss": [], "actor_loss": [], "critic_loss": [], "entropy": []}
         self.env = CartPole()
         self.env.seed(SEED)
         self.master_agent = MasterAgent(self.env.get_n_actions())
@@ -45,6 +46,8 @@ class Simulation(object):
             #### simulation start
             self.one_simulation_start(simulation_num)
             #### simulation end
+            for key, lst in zip(self.record_param.keys(), self.master_agent.get_record_param()):
+                self.record_param[key].append(lst)
             self.simulation_reward.append(self.reward)
             self.simulation_ave_reward.append(self.ave_reward)
             if (simulation_num + 1) % 10 == 0:
@@ -52,6 +55,8 @@ class Simulation(object):
                 DataShaping.makeCsv(self.simulation_ave_reward, 'reward', "{}_ave_reward_{}.csv".format(self.agent_name, simulation_num + 1))
         DataShaping.makeCsv(self.simulation_reward, 'reward', "{}_reward.csv".format(self.agent_name))
         DataShaping.makeCsv(self.simulation_ave_reward, 'reward', "{}_ave_reward.csv".format(self.agent_name))
+        for key in self.record_param.keys():
+            DataShaping.makeParamCsv(self.record_param[key], key, "{}_{}.csv".format(self.agent_name, key))
         end = time.time()
         LineNotify.send_line_notify(
             LINE_NOTIFY_FLG,
@@ -69,7 +74,7 @@ class Simulation(object):
 
         for n in range(UPDATE_NUM):
             self._output_progress(simulation_num, n)
-            for _ in range(TRAJECTORY_LENGTH + 1):
+            for _ in range(TRAJECTORY_LENGTH):
                 actions = self.master_agent.select(torch.from_numpy(states).type(DTYPE) / 255.0)
                 states = ray.get([agent.step.remote(action.item()) for action, agent in zip(actions, agents)])
                 states = np.array(states)
@@ -77,16 +82,12 @@ class Simulation(object):
             trajectories = ray.get([agent.get_collect_trajectory.remote() for agent in agents])
 
             for trajectory in trajectories:
-                trajectory["R"] = [0] * TRAJECTORY_LENGTH
-                inp = np.atleast_2d(trajectory["s2"][-1])
-                value, _ = self.master_agent.get_netowrk_outputs(torch.from_numpy(np.array([inp])).type(DTYPE) / 255.0)
-                # https://github.com/openai/baselines/blob/ea25b9e8b234e6ee1bca43083f8f3cf974143998/baselines/a2c/runner.py#L58-L69
-                R = 0.0
-                if (trajectory["dones"][-1] == 0):
-                    R = value.item()
-                for i in reversed(range(TRAJECTORY_LENGTH)):
-                    R = trajectory["r"][i] + GAMMA * (1 - trajectory["dones"][i]) * R
-                    trajectory["R"][i] = R
+                value, _ = self.master_agent.get_netowrk_outputs(torch.from_numpy(np.array([trajectory["s2"][-1]])).type(DTYPE) / 255.0)
+                if trajectory["dones"][-1] == 0:
+                    rewards = self._discounted_with_dones(trajectory["r"]+[value], trajectory["dones"]+[0])[:-1]
+                else:
+                    rewards = self._discounted_with_dones(trajectory["r"], trajectory["dones"])
+                trajectory["R"] = rewards
 
             self.master_agent.learning(trajectories, n + 1)
 
@@ -136,6 +137,14 @@ class Simulation(object):
         return str(elapsed_hour).zfill(2) + ":" \
                 + str(elapsed_minute).zfill(2) + ":" \
                 + str(elapsed_second).zfill(2)
+
+    def _discounted_with_dones(self, rewards, dones):
+        discounted = []
+        r = 0
+        for reward, done in zip(rewards[::-1], dones[::-1]):
+            r = reward + GAMMA * r * (1. - done)
+            discounted.append(r)
+        return discounted[::-1]
 
 if __name__ == '__main__':
     Simulation().start()
