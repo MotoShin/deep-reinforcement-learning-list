@@ -57,8 +57,8 @@ class ActorCriticNetwork(nn.Module):
 
     def _init_hidden(self, bsz):
         weight = next(self.parameters())
-        return (weight.new_zeros(bsz, 300),
-                weight.new_zeros(bsz, 300))
+        return (weight.new_zeros(bsz, 300).to(DEVICE),
+                weight.new_zeros(bsz, 300).to(DEVICE))
 
     def _init_lstmCellWeight(self):
         # the xavier initialization here is different than the one at the original code of critic_cartpole.

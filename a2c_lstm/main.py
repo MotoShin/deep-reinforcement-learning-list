@@ -85,7 +85,7 @@ class Simulation(object):
 
             for trajectory, value in zip(trajectories, values):
                 if trajectory["dones"][-1] == 0:
-                    rewards = self._discounted_with_dones(trajectory["r"]+[value], trajectory["dones"]+[0])[:-1]
+                    rewards = self._discounted_with_dones(trajectory["r"]+[value.item()], trajectory["dones"]+[0])[:-1]
                 else:
                     rewards = self._discounted_with_dones(trajectory["r"], trajectory["dones"])
                 trajectory["R"] = rewards
