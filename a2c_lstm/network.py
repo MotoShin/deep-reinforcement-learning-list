@@ -8,6 +8,7 @@ class ActorCriticNetwork(nn.Module):
     def __init__(self, batch_size, outputs):
         self.nhid = 300
         self.batch_size = batch_size
+        self.learning_batch_size = AGENTS_NUM * TRAJECTORY_LENGTH
 
         super(ActorCriticNetwork, self).__init__()
 
@@ -28,6 +29,8 @@ class ActorCriticNetwork(nn.Module):
         self.fc5_2 = nn.Linear(512, 128)
         self.layerLSTM = nn.LSTMCell(128, self.nhid, bias=True)
         self.hiddenLSTM = self._init_hidden(self.batch_size)
+        self.learningHiddenLstm = self._init_hidden(self.learning_batch_size)
+        self.inputHiddenLstm = self.hiddenLSTM
         self._init_lstmCellWeight()
         self.layerLinearPostLSTM = nn.Linear(self.nhid, 128)
         self.values = nn.Linear(128, 1)
@@ -43,16 +46,16 @@ class ActorCriticNetwork(nn.Module):
         action_probs = torch.distributions.categorical.Categorical(self.softmax(logits))
 
         x2 = F.relu(self.fc5_2(x))
-        self.hiddenLSTM = self.layerLSTM(x2, self.hiddenLSTM)
-        x2 = F.relu(self.layerLinearPostLSTM(self.hiddenLSTM[0]))
+        self.inputHiddenLstm = self.layerLSTM(x2, self.inputHiddenLstm)
+        x2 = F.relu(self.layerLinearPostLSTM(self.inputHiddenLstm[0]))
         values = self.values(x2)
 
         return values, action_probs
 
     def learning(self, x):
-        self.hiddenLSTM = self._init_hidden(AGENTS_NUM * TRAJECTORY_LENGTH)
+        self.inputHiddenLstm = self.learningHiddenLstm
         values, action_probs = self.forward(x)
-        self.hiddenLSTM = self._init_hidden(self.batch_size)
+        self.inputHiddenLstm = self.hiddenLSTM
         return values, action_probs
 
     def _init_hidden(self, bsz):
