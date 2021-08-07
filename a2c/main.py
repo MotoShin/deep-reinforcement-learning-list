@@ -84,7 +84,7 @@ class Simulation(object):
             for trajectory in trajectories:
                 value, _ = self.master_agent.get_netowrk_outputs(torch.from_numpy(np.array([trajectory["s2"][-1]])).type(DTYPE) / 255.0)
                 if trajectory["dones"][-1] == 0:
-                    rewards = self._discounted_with_dones(trajectory["r"]+[value], trajectory["dones"]+[0])[:-1]
+                    rewards = self._discounted_with_dones(trajectory["r"]+[value.item()], trajectory["dones"]+[0])[:-1]
                 else:
                     rewards = self._discounted_with_dones(trajectory["r"], trajectory["dones"])
                 trajectory["R"] = rewards
