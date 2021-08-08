@@ -6,13 +6,6 @@
 
 | 実装したもの | 実行方法 |
 ---- | ----
-| DQN | `$ cd dqn` |
-|     | `$ python main.py` |
-| a2c | `$ cd a2c` |
-|     | `$ python main.py` |
-|     | or |
-|     | `$ ./exec.sh` |
-| a2c lstm | `$ cd a2c_lstm` |
-|     | `$ python main.py` |
-|     | or |
-|     | `$ ./exec.sh` |
+| DQN | `$ cd dqn` <br> `$ python main.py` |
+| a2c | `$ cd a2c` <br> `$ python main.py` or `$ ./exec.sh` |
+| a2c lstm | `$ cd a2c_lstm` <br> `$ python main.py` or `$ ./exec.sh` |
