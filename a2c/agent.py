@@ -151,7 +151,7 @@ class MasterAgent:
 class TestAgent:
     def __init__(self, action_num):
         self.network = ActorCriticNetwork(action_num).type(DTYPE).to(device=DEVICE)
-        self.network.load_state_dict(torch.load(NET_PARAMETERS_BK_PATH))
+        self.network.load_state_dict(torch.load(NET_PARAMETERS_BK_PATH, map_location=torch.device(DEVICE)))
     
     def select(self, state):
         action_prob = None
